@@ -1,0 +1,343 @@
+function onJ1Change(uiHandle, id, newValue)
+ --set a new velocity to rotational joint1 according to GUI
+    sim.setJointTargetVelocity(jointHandles[0], newValue*0.01)
+end
+
+function onJ2Change(uiHandle, id, newValue)
+    --set a new velocity to translational joint2 according to GUI
+    cyclic, interval=sim.getJointInterval(jointHandles[1])
+    currPosition = sim.getJointPosition(jointHandles[1]) 
+    if currPosition >= interval[1]-0.1 and currPosition < interval[2]+0.1  then
+        sim.setJointTargetVelocity(jointHandles[1], newValue*0.01)
+    end
+end
+
+function onJ3Change(uiHandle, id, newValue)
+       --set a new velocity to rotational joint3 according to GUI
+    cyclic, interval=sim.getJointInterval(jointHandles[2])
+    currPosition = sim.getJointPosition(jointHandles[2]) 
+    if currPosition >= interval[1]-0.1 and currPosition < interval[2]+0.1  then
+        sim.setJointTargetVelocity(jointHandles[2], newValue*0.01)
+    end
+end
+
+function getJointHandles()
+    --a function to extract the object handle of each joint
+    jointHandles={-1,-1,-1}
+    for i=0,#jointHandles-1,1 do
+        jointHandles[i]=sim.getObjectHandle('joint'..i)
+    end
+end
+function jointControlUI()
+    -- Creates an UI to control the joints 
+    ui=simUI.create('<ui enabled="true" modal="false" title="RPP Mechanism FA" closeable="true" layout="vbox" placement="relative" position="50,50" >' ..
+    '<label enabled="true" text="Joint 1"></label>' ..
+    '<hslider enabled="true" minimum="-100" maximum="100" on-change="onJ1Change"></hslider>' ..
+    '<label enabled="true" text="Joint 2"></label>' ..
+    '<hslider enabled="true" minimum="-100" maximum="100" on-change="onJ2Change"></hslider>' ..
+    '<label enabled="true" text="Joint 3"></label>' ..
+    '<hslider enabled="true" minimum="-110" maximum="110" on-change="onJ3Change"></hslider>' ..
+    '</ui>')
+end
+
+function kinematicsSetup()
+
+    simBase=sim.getObjectHandle(sim.handle_self)
+    simTip=sim.getObjectHandle('RPR_Tip')
+    simTarget=sim.getObjectHandle('RPR_Target')
+    
+    ikEnv=simIK.createEnvironment()
+  
+    ikGroup_undamped=simIK.createIkGroup(ikEnv)
+    simIK.setIkGroupCalculation(ikEnv,ikGroup_undamped,simIK.method_pseudo_inverse,0,10)
+    simIK.addIkElementFromScene(ikEnv,ikGroup_undamped,simBase,simTip,simTarget,simIK.constraint_pose)
+    ikGroup_damped=simIK.createIkGroup(ikEnv)
+    simIK.setIkGroupCalculation(ikEnv,ikGroup_damped,simIK.method_damped_least_squares,0.3,99)
+    simIK.addIkElementFromScene(ikEnv,ikGroup_damped,simBase,simTip,simTarget,simIK.constraint_pose)
+end
+
+function kinematicActivate()
+   --simIK.applyIkEnvironmentToScene(ikEnv,ikGroup)
+    if simIK.applyIkEnvironmentToScene(ikEnv,ikGroup_undamped,true)~=simIK.result_success then
+        simIK.applyIkEnvironmentToScene(ikEnv,ikGroup_damped)
+    end
+
+end
+
+function initAndExtractPathInfo(path)
+    --formating ctrl points
+    ctrlPts1 = {}
+    for i = 1, #path, 1 do
+        for j = 1, #path[i], 1 do
+            table.insert(ctrlPts1, path[i][j])
+        end
+    end
+    --control points
+    --show individual path points
+    --Bezier interpolation
+    --x along path
+    --the up vector, used for generating an extruded shape and for computing individual path point orientations
+    local pathHandle0 = sim.createPath(ctrlPts1, 8, 100, 1.0, 0, {0,0,1})
+    
+    --control point data (each one has x,y,z,qx,qy,qz,qw (position and quaternion)):
+    pathData=sim.unpackDoubleTable(sim.readCustomDataBlock(pathHandle0,'PATH'))
+    local m = Matrix(#pathData//7,7,pathData)
+    pathPositions=m:slice(1,1,m:rows(),3):data()
+    pathQuaternions=m:slice(1,4,m:rows(),7):data()
+    pathLengths,totalLength=sim.getPathLengths(pathPositions,3)
+    velocity=0.2      -- m/s
+    posAlongPath=0    --number of individual path points
+    stopPosition = {pathPositions[#pathPositions-2],pathPositions[#pathPositions-1], pathPositions[#pathPositions]}
+    isTargetReached = false
+    return pathHandle0
+end
+
+function followInterpolatedPath(pathHandle0, isLoop)
+    if (isTargetReached == false) then
+        local dist = 0
+        local t = sim.getSimulationTime()
+        posAlongPath = posAlongPath+velocity*(t-previousSimulationTime)
+        if isLoop then 
+            posAlongPath = posAlongPath % totalLenght
+            --posAlongPath=(posAlongPath % totalLength)+0.1
+            isTargetReached = false
+        end
+        local pos = sim.getPathInterpolatedConfig(pathPositions, pathLengths,posAlongPath)
+        local quat = sim.getPathInterpolatedConfig(pathQuaternions, pathLengths, posAlongPath, nil, {2,2,2,2})
+        sim.setObjectPosition(simTarget, pathHandle0,pos)
+        sim.setObjectQuaternion(simTarget,pathHandle0,quat)
+        previousSimulationTime=t
+    end
+end
+        
+function updateTargetPath(nextTargetObject)
+    --simTarget is locate in the ee so robot pose is assumed ee pose
+    print('update target path')
+    currRobotPose = sim.getObjectPose(simTarget, -1)
+    --first obj to take
+    currTargetObject = nextTargetObject
+    --understand if dummy is in zero position
+    currInteractionPoint = sim.getObjectChild(currTargetObject, 0)
+    --get the pose in the absolute ref frame
+    targetPose = sim.getObjectPose(currInteractionPoint, -1)
+    --return init and goal pose of path
+    return {currRobotPose, targetPose}
+end
+
+function extractTargetObjectsInScene()
+    local targetHandles0={}
+    local handle1 = 0
+    local handle2 = 0
+    local handle3 = 0
+    
+    handle1 = sim.getObjectHandle('generatedCamShaft')
+    table.insert(targetHandles0, handle1)
+    handle2 = sim.getObjectHandle('generatedFuelPump')
+    table.insert(targetHandles0, handle2)
+    handle3 = sim.getObjectHandle('generatedOilTray')
+    table.insert(targetHandles0, handle3)
+    
+    --print(targetHandles0)
+    return targetHandles0
+end
+        
+function extractDropObjectsInScene()
+    --Target objects
+    local dropPointHandles0={}
+    local dropHandle = 0
+    local j = 0
+    
+    while dropHandle ~= -1 do
+        dropHandle = sim.getObjectHandle('DropPoint'..j .."@silentError")
+        --print(dropHandle)
+        if (dropHandle ~= -1) then
+            table.insert(dropPointHandles0, dropHandle)
+        end
+        j = j + 1
+    end
+    return dropPointHandles0
+end
+ 
+function updateDropPointPath(nextDropPoint)
+    currRobotPose = sim.getObjectPose(simTarget, -1)
+    local offsetRobotPose = currRobotPose
+    offsetRobotPose[3] = offsetRobotPose[3] + 0.1
+    currInteractionPoint = nextDropPoint
+    targetPose = sim.getObjectPose(currInteractionPoint, -1)
+    return {currRobotPose,offsetRobotPose, targetPose}
+end
+
+function checkColor()
+    res, data = sim.readVisionSensor(IDHandle)
+    isRed = false
+    isGreen = false
+    isBlue = false
+    if(res == 0) then
+        if(data[12]>0 and data[13]==0.0 and data[14]==0.0) then
+            isRed = true
+        elseif(data[12]==0.0 and data[13]>0 and data[14]==0.0) then
+            isGreen = true
+        elseif(data[12]==0.0 and data[13]==0.0 and data[14]>0) then
+            isBlue = true
+        end
+        return res0, {isRed,isGreen,isBlue}
+    end
+end
+
+function ProxSensor()
+    proximitySensorDistance = sim.readProximitySensor(sensorHandle)
+    if proximitySensorDistance > 0 then
+        return true
+    else 
+        return false
+    end
+end
+
+function returnToIdle()
+    path = updateTargetPath(Gpoint)
+    pathHandle = initAndExtractPathInfo(path)
+end
+       
+function sysCall_init()
+    --do some initialization here
+    
+    -- IK
+    kinematicsSetup()
+    visorSensorHandle = sim.getObjectHandle('HorizontalSensor')
+    IDHandle = sim.getObjectHandle('IdSensor')
+    sensorHandle = sim.getObjectHandle('Proximity_sensor')
+    Gpoint = sim.getObjectHandle('G')
+    --Trajectory based on target availaable in the scene
+    --targetHandles = extractTargetObjectsInScene();
+    noOfTargets = 100
+    currTargetIdx = 1
+    previousSimulationTime=0
+    --path = updateTargetPath(targetHandles[currTargetIdx])
+    --rob = sim.getObjectPose(simTarget, -1)
+    --tar = sim.getObjectPose(Gpoint, -1)
+    path = updateTargetPath(Gpoint)
+    pathHandle = initAndExtractPathInfo(path)
+    
+    isAllTargetComplete = false
+    
+    distanceSegment = sim.addDrawingObject(sim.drawing_lines,4,0,-1,1,{0,1,0})
+    
+    isDropPointSet = false
+    isDropPointReached = true
+    isTargetReached = false
+    
+    suctionPad = sim.getObjectHandle('suctionPad')
+    waitTimer = 0
+    dropPointHandles = extractDropObjectsInScene()
+    noOfDropPoints = #dropPointHandles
+    currDropPointIdx = 1
+end
+
+function sysCall_actuation()
+    -- put your actuation code here
+    kinematicActivate()
+    
+    sensor = ProxSensor()
+    a, target = sim.readVisionSensor(visorSensorHandle)
+    print(target)
+    followInterpolatedPath(pathHandle, false)
+    if sensor then
+        
+        deteced, color = checkColor()
+        --targetHandles = extractTargetObjectsInScene()
+        print(color[1])
+        print(color[2])
+        print(color[3])
+        --targetHandles = extractTargetObjectsInScene()
+        if color[1] then
+            currDropPointIdx = 3
+            --currTargetIdx = 0
+            --print(currTargetIdx)
+            --targetHandles = {sim.getObjectHandle('generatedCamShaft')}
+        elseif color[2] then
+            currDropPointIdx = 1
+            --currTargetIdx = 1
+            --print(currTargetIdx)
+            --targetHandles = {sim.getObjectHandle('generatedFuelPump')}
+        elseif color[3] then
+            currDropPointIdx = 2
+            --currTargetIdx = 2
+            --print(currTargetIdx)
+            --targetHandles = {sim.getObjectHandle('generatedOilTray')}
+        end
+            
+            targetHandles = target[1]
+            --targetHandles = extractTargetObjectsInScene()
+           
+        if (isTargetReached and isDropPointReached  and isDropPointSet== false ) then
+        -- Making sure that the currTargetIdx does not increase more than the noOfTargets
+        if currTargetIdx ~= noOfTargets then 
+           --currTargetIdx = currTargetIdx + 1;
+        else 
+          isAllTargetComplete = true;
+        end
+        if (currTargetIdx <= noOfTargets and isAllTargetComplete == false) then
+            print(targetHandles)
+           path = updateTargetPath(targetHandles)
+           pathHandle = initAndExtractPathInfo(path)
+           
+           isDropPointReached=false
+           isTargetReached =false 
+           
+        end
+        end
+   
+   --Check if the target is attached to the robot endeffector
+   anchorPoint = sim.getObjectChild(targetHandles,1)
+   print(anchorPoint)
+   if (anchorPoint ~=-1 and isDropPointSet==false and isDropPointReached==false) then
+        isTargetReached = false;
+        path = updateDropPointPath(dropPointHandles[currDropPointIdx])
+        pathHandle = initAndExtractPathInfo(path)
+        isDropPointSet = true;
+   end
+   --Drop functionality for suction pad
+   if (isDropPointSet == true and isTargetReached == true ) then
+        print("Drop Point Reached")
+        if (isDropPointReached == false) then
+            waitTimer = sim.getSimulationTime();
+        end
+        isDropPointReached = true
+        sim.setLinkDummy(sim.getObjectHandle('suctionPadLoopClosureDummy1'),-1) 
+        --make sure it had enough time to drop far away from the range of the sensor
+        -- or else it will grab again during fall
+        local timeExpired = sim.getSimulationTime()-waitTimer;
+        if (timeExpired > 1) then
+            sim.setObjectParent(sim.getObjectHandle('suctionPadLoopClosureDummy1'),suctionPad,false)-- reparent to the suctionPad
+            isDropPointSet = false;
+            isTargetReached = false;
+            --currDropPointIdx = currDropPointIdx+1;
+        end
+        returnToIdle()
+    end
+   end
+end
+
+function sysCall_sensing()
+    -- put your sensing code here
+    if sensor then
+    print(simTip)
+    print(currInteractionPoint)
+    
+    local result,distData,objectPair = sim.checkDistance(simTip, currInteractionPoint)
+    if result>0 then
+        if(distData[7] < 0.1) then
+            isTargetReached = true
+        end
+    sim.addDrawingObjectItem(distanceSegment,nil)
+    sim.addDrawingObjectItem(distanceSegment,distData)
+    end
+    end
+end
+
+function sysCall_cleanup()
+    -- do some clean-up here
+    simIK.eraseEnvironment(ikEnv)
+end
+
+

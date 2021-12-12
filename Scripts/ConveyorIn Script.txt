@@ -1,0 +1,98 @@
+ function ConveyorControl()
+    proximitySensorDistance = sim.readProximitySensor(sensorHandle)
+    if proximitySensorDistance > 0 then
+        sim.writeCustomDataBlock(conveyorHandle,'CONVMOV', sim.packTable({vel = 0}))
+    else 
+        sim.writeCustomDataBlock(conveyorHandle,'CONVMOV', sim.packTable({vel = -0.5}))
+    end
+end
+
+function SpawnParts()
+
+    spawnZoneEmpty = sim.readProximitySensor(spawnerSensorHandle)
+    if((sim.getSimulationTime()-spawnTimer) >= spawnInterval and spawnZoneEmpty==0) then
+        local i = math.random(1,3)
+        if (i == 1) then
+            CvxHandle = sim.getObjectHandle('generatedOilTray0')
+            MeshHandle = sim.getObjectHandle('OilTray0')
+            intHandle = sim.getObjectHandle('OilTrayInteraction0')
+        
+            testo = 'generatedOilTray'..noOfTrailSpawned
+        
+            noOfTrailSpawned = noOfTrailSpawned + 1 
+         
+        end
+        if (i == 2) then
+            CvxHandle = sim.getObjectHandle('generatedCamShaft0')
+            MeshHandle = sim.getObjectHandle('CamShaft0')
+            intHandle = sim.getObjectHandle('CamShaftInteraction0')
+            print(noOfShaftSpawned)
+            testo = 'generatedCamShaft'..noOfShaftSpawned
+        
+            noOfShaftSpawned = noOfShaftSpawned + 1
+        
+        end
+        if (i == 3) then
+            CvxHandle = sim.getObjectHandle('generatedFuelPump0')
+            MeshHandle = sim.getObjectHandle('FuelPump0')
+            intHandle = sim.getObjectHandle('FuelPumpInteraction0')
+        
+            testo = 'generatedFuelPump'..noOfPumpSpawned
+        
+            noOfPumpSpawned = noOfPumpSpawned + 1
+        
+        end
+        sim.removeObjectFromSelection(sim.handle_all,0);
+        sim.addObjectToSelection(sim.handle_single,CvxHandle);
+        sim.addObjectToSelection(sim.handle_single,MeshHandle);
+        sim.addObjectToSelection(sim.handle_single,intHandle)
+        copiedObj= simCopyPasteSelectedObjects()
+        print(testo)
+        CopyHandle = sim.getObjectHandle(testo);
+        --print(CopyHandle)
+        sim.setObjectPosition(CopyHandle,spawnPointHandle,{0,0,0});
+        sim.removeObjectFromSelection(sim.handle_all,0);
+        sim.addObjectToSelection(initialSelection);
+        spawnTimer = sim.getSimulationTime();
+        
+    end
+end
+    
+        
+        
+
+function sysCall_init()
+    sensorHandle = sim.getObjectHandle('Proximity_sensor')
+    conveyorHandle = sim.getObjectHandle('ConveyorIn')
+    spawnPointHandle = sim.getObjectHandle('SpawnPoint')
+    spawnerSensorHandle = sim.getObjectHandle('Proximity_sensor_spawner')
+    initialSelection = sim.getObjectSelection()
+    
+    sim.writeCustomDataBlock(conveyorHandle,'CONVMOV', sim.packTable({vel=-0.5}))
+    
+    spawnInterval = 3
+    spawnTimer = sim.getSimulationTime()
+    
+    noOfTrailSpawned = 1
+    noOfShaftSpawned = 1
+    noOfPumpSpawned = 1
+  
+    
+-- do some initialization here
+end
+
+function sysCall_actuation()
+    
+    
+    SpawnParts()
+    ConveyorControl()
+    -- put your actuation code here
+end
+
+function sysCall_sensing()
+    -- put your sensing code here
+end
+
+function sysCall_cleanup()
+    -- do some clean-up here
+end
