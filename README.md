@@ -22,3 +22,8 @@ To all three shaped was appllied a material, in order to more accurately model t
 **Spawn system**
 
 A dummy object (SpawnPoint, child of ConveyorIn) is responsible to spawn the items via its child script(by using **Proximity sensor spawner** as child of SpawnPoint). The delay between each spawn is, currently, hardcoded as 20 seconds +- 4 seconds of random variability added on purpose. To each model spawned is added a reasonable random rotation component to model variability in the incoming items orientation.
+
+**Robot Mechanism**
+
+Since the load/unload task does not require fine manipulation of the conveyed objects, a Cartesian (RPR) mechanism has been chosen as the body of the robot. It consists of a
+basic disk that merges with a PRR connector as a groupping shapes. Three joints and three links are connected to each other to reach the end effector of Force sensor. The mechanism of force sensor is included of Suction pad and its child scripts.
