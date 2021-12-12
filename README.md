@@ -4,6 +4,5 @@ The goal of the assignment is to design and develop a manufacturing cell in whic
 
 **Problem Statement**
 
-You can also find here the problem statement
-
+You can also find here the problem statement :
 [FlexibleAutomation_SimulationAssignment_Questions_UniGe_2021.pdf](https://github.com/Farzinsvi/FlexibleAutomation_Simulation/files/7699222/FlexibleAutomation_SimulationAssignment_Questions_UniGe_2021.pdf)
