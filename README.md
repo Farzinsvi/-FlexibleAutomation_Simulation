@@ -31,3 +31,7 @@ basic disk that merges with a PRR connector as a groupping shapes. Three joints 
 **Conveyors**
 
 Same width chosen to reduce the need to custom fit each one to each new item encountered, in order to increase generlizeability.
+
+**Sensors**
+
+Horizontal sensor and Vertical sensor as render mood of OpenGL and Color coded handles can detect target position of suctionpad and in order to stop models at the end of ConveyorIn for picking up processing, Proximity sensor with subtype of ultrasonic can help in this manner.
