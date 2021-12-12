@@ -27,3 +27,7 @@ A dummy object (SpawnPoint, child of ConveyorIn) is responsible to spawn the ite
 
 Since the load/unload task does not require fine manipulation of the conveyed objects, a Cartesian (PRR) mechanism has been chosen as the body of the robot. It consists of a
 basic disk that merges with a PRR connector as a groupping shapes. Three joints and three links are connected to each other to reach the end effector of Force sensor. The mechanism of force sensor is included of Suction pad and its child scripts.
+
+**Conveyors**
+
+Same width chosen to reduce the need to custom fit each one to each new item encountered, in order to increase generlizeability.
