@@ -18,3 +18,13 @@ To all three shaped was appllied a material, in order to more accurately model t
 **Materials**
 
 ![Untitled](https://user-images.githubusercontent.com/74813983/145723072-90c5ee0a-9b1c-425d-bb67-8bb082dfcf53.png)
+
+Model of the engine parts:
+
+https://unigeit.sharepoint.com/:f:/r/sites/FLEXIBLEAUTOMATION2021/Documenti%
+20condivisi/ModelForSimulationAssignment?csf=1&web=1&e=B9YCQ1
+
+
+**Spawn system**
+
+A dummy object (SpawnPoint, child of ConveyorIn) is responsible to spawn the items via its child script(by using **Proximity sensor spawner** as child of SpawnPoint). The delay between each spawn is, currently, hardcoded as 20 seconds +- 4 seconds of random variability added on purpose. To each model spawned is added a reasonable random rotation component to model variability in the incoming items orientation.
